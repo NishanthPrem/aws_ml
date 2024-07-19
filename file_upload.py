@@ -11,7 +11,7 @@ s3 = boto3.client('s3',
                   aws_access_key_id=aws_access_key_id,
                   aws_secret_access_key=aws_secret_access_key,
                   region_name=aws_default_region )
-bucket_name = '0708-aws-ml'
+bucket_name = os.getenv('BUCKET_NAME')
 
 s3.upload_file('train.csv', bucket_name, 'data/train.csv')
 s3.upload_file('test.csv', bucket_name, 'data/test.csv')
