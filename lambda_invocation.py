@@ -10,7 +10,7 @@ lambda_client = boto3.client('lambda')
 event = {
     'bucket_name': os.getenv('BUCKET_NAME'),
     'train_file_key': 'data/train.csv',
-    'test_file_key': 'data/test.csv'
+    'test_file_key': 'data/test.csv',
     'ExecutionRoleArn': os.getenv('SAGEMAKER_ROLE_ARN')
 }
 

@@ -66,13 +66,14 @@ def preprocess_data(df):
     # Add more preprocessing steps as needed
     return df
 
-def train_sagemaker(bucket, train_key):
-    role = os.getenv('SAGEMAKER_ROLE_ARN')  # The SageMaker execution role
-    training_job_name = 'your-training-job-name'
-    sagemaker_client.create_training_job(
+def train_sagemaker(bucket, train_key, test_key, output_key):
+    role = 'arn:aws:iam::123456789012:role/SageMakerExecutionRole'  # The SageMaker execution role ARN
+    training_job_name = 'aws-ml-train'
+    
+    response = sagemaker_client.create_training_job(
         TrainingJobName=training_job_name,
         AlgorithmSpecification={
-            'TrainingImage': 'your-sagemaker-image-uri',
+            'TrainingImage': '632365934929.dkr.ecr.us-west-1.amazonaws.com/knn:1',
             'TrainingInputMode': 'File'
         },
         RoleArn=role,
@@ -86,11 +87,22 @@ def train_sagemaker(bucket, train_key):
                         'S3DataDistributionType': 'FullyReplicated'
                     }
                 },
-                'ContentType': 'text/csv'
+                'ContentType': 'application/x-recordio-protobuf'
+            },
+            {
+                'ChannelName': 'test',
+                'DataSource': {
+                    'S3DataSource': {
+                        'S3DataType': 'S3Prefix',
+                        'S3Uri': f's3://{bucket}/{test_key}',
+                        'S3DataDistributionType': 'FullyReplicated'
+                    }
+                },
+                'ContentType': 'application/x-recordio-protobuf'
             }
         ],
         OutputDataConfig={
-            'S3OutputPath': f's3://{bucket}/output/'
+            'S3OutputPath': f's3://{bucket}/{output_key}'
         },
         ResourceConfig={
             'InstanceType': 'ml.m5.large',
@@ -101,49 +113,5 @@ def train_sagemaker(bucket, train_key):
             'MaxRuntimeInSeconds': 3600
         }
     )
-    return training_job_name
-
-def predict_sagemaker(training_job_name, test_data):
-    endpoint_name = f'{training_job_name}-endpoint'
-    sagemaker_client.create_model(
-        ModelName=training_job_name,
-        PrimaryContainer={
-            'Image': 'your-sagemaker-image-uri',
-            'ModelDataUrl': f's3://your-bucket-name/output/{training_job_name}/output/model.tar.gz'
-        },
-        ExecutionRoleArn=os.getenv('SAGEMAKER_ROLE_ARN')
-    )
-    sagemaker_client.create_endpoint_config(
-        EndpointConfigName=endpoint_name,
-        ProductionVariants=[
-            {
-                'VariantName': 'AllTraffic',
-                'ModelName': training_job_name,
-                'InitialInstanceCount': 1,
-                'InstanceType': 'ml.m5.large'
-            }
-        ]
-    )
-    sagemaker_client.create_endpoint(
-        EndpointName=endpoint_name,
-        EndpointConfigName=endpoint_name
-    )
-
-    # Wait for the endpoint to be in service
-    waiter = sagemaker_client.get_waiter('endpoint_in_service')
-    waiter.wait(EndpointName=endpoint_name)
-
-    # Invoke the endpoint with the test data
-    response = sagemaker_runtime_client.invoke_endpoint(
-        EndpointName=endpoint_name,
-        ContentType='text/csv',
-        Body=test_data.to_csv(index=False, header=False).encode('utf-8')
-    )
-    predictions = pd.read_csv(StringIO(response['Body'].read().decode('utf-8')))
-
-    # Delete the endpoint after use
-    sagemaker_client.delete_endpoint(EndpointName=endpoint_name)
-    sagemaker_client.delete_model(ModelName=training_job_name)
-    sagemaker_client.delete_endpoint_config(EndpointConfigName=endpoint_name)
-
-    return predictions
+    
+    return response
